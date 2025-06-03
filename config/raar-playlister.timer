@@ -1,0 +1,12 @@
+# /etc/systemd/system/raar-playlister.timer
+# sudo systemctl enable raar-playlister.timer
+# sudo systemctl start raar-playlister.timer
+
+[Unit]
+Description=Generate spotify playlists for the latest broadcasts of selected shows.
+
+[Timer]
+OnCalendar=02:30
+
+[Install]
+WantedBy=timers.target

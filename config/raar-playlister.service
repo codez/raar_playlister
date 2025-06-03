@@ -1,0 +1,11 @@
+# /etc/systemd/system/raar-playlister.service
+
+[Unit]
+Description=Generate spotify playlists for the latest broadcasts of selected shows.
+
+[Service]
+Type=simple
+User=raar-scripts
+Nice=10
+WorkingDirectory=/opt/raar-playlister
+ExecStart=/usr/bin/scl enable rh-ruby30 -- ./raar_playlister.rb

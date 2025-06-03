@@ -1,0 +1,30 @@
+playlister:
+  log_level: debug
+  # The shows to generate playlists for,
+  # optionally only for a given weekday
+  shows:
+    - Gschächnütschlimmers
+    - [Der Morgen, Mittwoch]
+    - [Der Morgen, Freitag]
+    - 4 the Record
+  number_of_broadcasts: 10
+  name_prefix: "Radio RaBe - "
+
+raar:
+  url: https://archiv.rabe.ch/api
+  options:
+    verify_ssl: 0 # OpenSSL::SSL::VERIFY_NONE
+
+spotify:
+  # Generate an app at https://developer.spotify.com,
+  # enter the redirect_uri below,
+  # copy the credentials here
+  # and then generate the refresh token (see below)
+  client_id:
+  client_secret:
+  user_id: # your spotify user id
+  redirect_uri: https://example.com/callback
+  # Call `bin/spotify.rb login`,
+  # copy the code param from the redirect URL
+  # and then generate the token with `bin/spotify.rb refresh_token <code>`
+  refresh_token:
