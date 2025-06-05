@@ -2,7 +2,7 @@ require 'base64'
 
 class SpotifyClient
   MAX_TRACKS = 100
-  MAX_PLAYLISTS = 50
+  MAX_PAGE_SIZE = 50
 
   attr_reader :settings, :logger
 
@@ -11,17 +11,40 @@ class SpotifyClient
     @logger = logger
   end
 
-  def assert_playlist(name, description)
-    get_playlist(name) || create_playlist(name, description)
+  def assert_playlist(name)
+    get_playlist(name) || create_playlist(name)
   end
 
-  def add_tracks_to_playlist(playlist_id, tracks)
-    logger.debug("Searching #{tracks.size} tracks...")
-    tracks.each_slice(MAX_TRACKS).with_index do |batch, index|
-      method = index.zero? ? :put : :post
-      uris = batch.map { |track| search_song(track)&.fetch('uri') }.compact
-      logger.debug("Found some #{uris.size} songs")
-      add_songs_to_playlist(method, playlist_id, uris)
+  def search_song(title, artist)
+    query = CGI.escape("#{normalize_title(title)} artist:#{artist}")
+    api_request(:get, "search?type=track&limit=3&q=#{query}")
+      .dig('tracks', 'items')
+      .first || log_no_song(title, artist)
+  end
+
+  def fetch_playlist_song_uris(playlist_id)
+    get_paginated("playlists/#{playlist_id}/tracks?fields=items(track(uri))&")
+      .map { |item| item.dig('track', 'uri') }
+  end
+
+  def clear_playlist(playlist_id)
+    api_request(:put, "playlists/#{playlist_id}/tracks", { uris: [] })
+  end
+
+  def add_songs_to_playlist(playlist_id, uris, position = nil)
+    logger.info("Adding #{uris.size} tracks...") unless uris.empty?
+    uris.each_slice(MAX_TRACKS) do |batch|
+      body = { uris: batch, position: position }
+      api_request(:post, "playlists/#{playlist_id}/tracks", body)
+      position += MAX_TRACKS if position
+    end
+  end
+
+  def remove_songs_from_playlist(playlist_id, uris)
+    logger.info("Removing #{uris.size} tracks...") unless uris.empty?
+    uris.each_slice(MAX_TRACKS) do |batch|
+      body = { tracks: batch.map { |uri| { uri: uri } } }
+      api_request(:delete, "playlists/#{playlist_id}/tracks", body)
     end
   end
 
@@ -46,45 +69,41 @@ class SpotifyClient
 
   private
 
-  def get_playlist(name, offset = 0)
-    path = "users/#{user_id}/playlists?limit=#{MAX_PLAYLISTS}&offset=#{offset}"
-    items = api_request(:get, path).fetch('items')
-    items.find { |playlist| playlist['name'] == name } ||
-      (items.size < MAX_PLAYLISTS ? nil : get_playlist(name, offset + MAX_PLAYLISTS))
-  end
-
-  def create_playlist(name, description)
-    logger.debug("Creating playlist #{name}")
-    api_request(:post, "users/#{user_id}/playlists", { name: name, description: description })
-  end
-
-  def search_song(track)
-    query = CGI.escape([track['title'], track['artist']].join(' '))
-    api_request(:get, "search?type=track&q=#{query}")
-      .dig('tracks', 'items')
-      .first
-    # .tap { |song| log_different_song(track, song) }
-  end
-
-  def log_different_song(track, song)
-    if song
-      song_artists = song['artists'].map { |a| a['name'] }.sort
-      if song['name'].downcase != track['title'].downcase ||
-         song_artists.map(&:downcase) != track['artist'].downcase.split(', ').sort
-        logger.info("Found song '#{song['name']}' by #{song_artists.join(', ')} -- " \
-                    "instead of '#{track['title']}' by #{track['artist']}")
-      end
-    else
-      logger.info("Could not find song #{track['title']} by #{track['artist']}")
+  def get_playlist(name)
+    get_paginated("users/#{user_id}/playlists?") do |items|
+      match = items.find { |playlist| playlist['name'] == name }
+      return match if match
     end
+    nil
   end
 
-  def add_songs_to_playlist(method, playlist_id, uris)
-    api_request(method, "playlists/#{playlist_id}/tracks", { uris: uris })
+  def get_paginated(path, offset = 0)
+    items = api_request(:get, "#{path}limit=#{MAX_PAGE_SIZE}&offset=#{offset}").fetch('items')
+    yield items if block_given?
+    items + (items.size < MAX_PAGE_SIZE ? [] : get_paginated(path, offset + MAX_PAGE_SIZE))
+  end
+
+  def create_playlist(name)
+    logger.info("Creating playlist #{name}")
+    api_request(:post, "users/#{user_id}/playlists", { name: name, description: '' })
+  end
+
+  def log_no_song(title, artist)
+    logger.debug("Could not find song '#{title}' by #{artist}")
+    nil
   end
 
   def user_id
     settings.fetch('user_id')
+  end
+
+  def normalize_title(title)
+    # - remove everything in brackets (e.g. extended mix)
+    # - remove feat. (appears more likely in artists)
+    title
+      .gsub(/\(.+?\)/, '')
+      .gsub(/\[.+?\]/, '')
+      .split('feat.').first
   end
 
   def access_token

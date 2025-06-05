@@ -4,6 +4,9 @@ AllCops:
 Layout/EmptyLinesAroundClassBody:
   Enabled: false
 
+Metrics/ClassLength:
+  Max: 150
+
 Style/Documentation:
   Enabled: false
 
