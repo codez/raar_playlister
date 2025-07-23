@@ -20,6 +20,9 @@ class SpotifyClient
     api_request(:get, "search?type=track&limit=3&q=#{query}")
       .dig('tracks', 'items')
       .first || log_no_song(title, artist)
+  rescue RestClient::BadRequest
+    logger.error("Error while finding song '#{title}' by #{artist}")
+    nil
   end
 
   def fetch_playlist_song_uris(playlist_id)
@@ -126,7 +129,7 @@ class SpotifyClient
     )
     JSON.parse(response.body)
   rescue RestClient::ExceptionWithResponse => e
-    logger.error("#{e}\n#{e.response.body}")
+    logger.error("#{e}: #{e.response.body}")
     raise e
   end
 

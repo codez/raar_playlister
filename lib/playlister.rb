@@ -40,19 +40,19 @@ class Playlister
     )
   end
 
-  def fetch_latest_tracks(broadcasts)
-    broadcasts.flat_map do |broadcast|
-      raar_client.fetch_broadcast_tracks(broadcast['id'])
-    end
-  end
-
   def cache_song_uris(broadcasts, cache)
-    fetch_latest_tracks(broadcasts).each do |track|
+    fetch_latest_tracks(broadcasts) do |track|
       cache.add_track(track) do
         title = track.dig('attributes', 'title')
         artist = track.dig('attributes', 'artist')
         spotify_client.search_song(title, artist)&.fetch('uri')
       end
+    end
+  end
+
+  def fetch_latest_tracks(broadcasts, &block)
+    broadcasts.each do |broadcast|
+      raar_client.fetch_broadcast_tracks(broadcast['id']).each(&block)
     end
   end
 
